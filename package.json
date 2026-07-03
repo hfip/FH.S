@@ -1,12 +1,10 @@
 {
-  "name": "faselhd-stremio-addon",
+  "name": "faselhd-stremio-alooy-style",
   "version": "1.0.0",
   "type": "module",
-  "main": "index.js",
+  "main": "api/index.js",
   "dependencies": {
     "express": "^4.21.2",
-    "cors": "^2.8.5",
-    "axios": "^1.12.0",
-    "cheerio": "^1.0.0-rc.12"
+    "cors": "^2.8.5"
   }
 }
