@@ -1,5 +1,5 @@
 /**
- * FaselHD Stremio Addon - AlooyTV Architecture
+ * FaselHD Stremio Addon
  * Developed & Maintained by: Abdullah
  * Telegram: @Abdullu.X
  * Current Update: 2026
@@ -7,89 +7,122 @@
 
 import express from "express";
 import cors from "cors";
+import https from "https";
+import http from "http";
 
 const app = express();
 app.use(cors({ origin: "*" }));
 
-// الدومين الجديد والشغال لموقع فاصل في 2026
-const FASEL_BASE = "https://web736x.faselhdx.top";
-
-// مفتاح تفعيل التحويل التلقائي لمعرفات الـ TMDB
-const TMDB_API_KEY = "439c478a771f35c05022f9feabcca01c";
+// السيرفر الخلفي الذكي ومفتاح TMDB الشغالين 100%
+const BACKEND = "http://145.241.158.129:3112";
+const TMDB_KEY = "8265bd1679663a7ea12ac168da84d2e8";
+const ICON = "https://raw.githubusercontent.com/hfip/arabic-providers/main/IMG_5223.jpeg";
 
 const MANIFEST = {
-  id: "org.faselhd.stremio.abdullah.alooy",
-  version: "1.0.0",
-  name: "FaselHD - Abdullah (Alooy Style)",
-  description: "إضافة فاصل إتش دي بنظام البث المباشر الآمن والمتوافق مع المشغلات الخارجية - بواسطة Abdullah",
-  logo: `${FASEL_BASE}/favicon.ico`,
+  id: "community.faselhdx.abdulluhx.v3",
+  version: "3.0.0",
+  name: "FaselHD by Abdulluh.X",
+  description: "أفلام ومسلسلات عربية وأجنبية بترجمة محروقة - بواسطة Abdullah",
+  logo: ICON,
   resources: ["stream"],
   types: ["movie", "series"],
-  idPrefixes: ["tt", "tmdb"], // دعم قراءة معرفات IMDB و TMDB معاً لمنع فقدان المصادر
+  catalogs: [],
+  idPrefixes: ["tt"]
 };
 
+// دالة جلب البيانات عبر الـ Promise المتوافقة مع السيرفر الخلفي
+function fetchUrl(url) {
+  return new Promise((resolve, reject) => {
+    const client = url.startsWith("https") ? https : http;
+    const req = client.get(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+      timeout: 30000
+    }, (res) => {
+      let data = "";
+      res.on("data", chunk => data += chunk);
+      res.on("end", () => {
+        try { resolve(JSON.parse(data)); }
+        catch (e) { reject(e); }
+      });
+    });
+    req.on("error", reject);
+    req.on("timeout", () => { req.destroy(); reject(new Error("timeout")); });
+  });
+}
+
+// دالة تحويل معرف IMDB إلى معرف TMDB الرقمي
+async function imdbToTmdb(imdbId, type) {
+  try {
+    const url = `https://api.themoviedb.org/3/find/${imdbId}?api_key=${TMDB_KEY}&external_source=imdb_id`;
+    const data = await fetchUrl(url);
+    if (type === "movie" && data.movie_results && data.movie_results.length > 0) {
+      return String(data.movie_results[0].id);
+    }
+    if (type === "series" && data.tv_results && data.tv_results.length > 0) {
+      return String(data.tv_results[0].id);
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// الواجهة الرئيسية للإضافة
 app.get("/", (_req, res) => {
-  res.send("<h1>FaselHD Addon (AlooyTV Style) is running!</h1>");
+  res.send("<h1>FaselHD Stremio Addon (V3 Engine) is running successfully!</h1>");
 });
 
-app.get("/manifest.json", (_req, res) => res.json(MANIFEST));
+// ميثود المانيفست الرسمي لـ Stremio
+app.get("/manifest.json", (_req, res) => {
+  res.json(MANIFEST);
+});
 
+// معالج جلب روابط البث الصافية والربط مع الـ Backend
 app.get("/stream/:type/:id.json", async (req, res) => {
   const { type, id } = req.params;
   
-  // تصفية المعرفات واستخراج الأرقام النظيفة لنوعي المعرفات
-  const cleanId = id.replace("tmdb:", "").replace("tt", "").split(":")[0];
-  const isTmdb = id.startsWith("tmdb:");
-  
-  const seasonMatch = id.match(/:(\d+):/);
-  const episodeMatch = id.match(/:(\d+):(\d+)/);
-  const seasonNum = seasonMatch ? seasonMatch[1] : "1";
-  const episodeNum = episodeMatch ? episodeMatch[2] : "1";
+  try {
+    const parts = id.split(":");
+    const imdbId = parts[0];
+    const season = parts[1] || "1";
+    const episode = parts[2] || "1";
 
-  // إعداد اسم مشغل الفيديو في واجهة ستريميو لحفظ حقوقك
-  const providerName = "🎬 Abdullah - FaselHD HQ";
-
-  // هنا السحر: نقوم بتوليد رابط فك التشفير المباشر ليعمل في واجهة المستخدم (Frontend)
-  // كود الـ JavaScript في جهاز المستخدم هو من سيتصل بفاصل وليس سيرفر فيرسيل لتفادي الـ 403 تماماً
-  let streamUrl = "";
-  let streamTitle = "";
-
-  if (type === "movie") {
-    if (isTmdb) {
-      // إذا كان القادم معرف TMDB، نوجهه لصفحة البحث المباشرة بالاسم عبر واجهة المشغل
-      streamUrl = `${FASEL_BASE}/?s=${cleanId}`;
-      streamTitle = "اضغط هنا للبحث التلقائي وتشغيل الفيلم";
-    } else {
-      // إذا كان IMDB، نوجهه مباشرة لصفحة معرف الفيلم النظيف
-      streamUrl = `${FASEL_BASE}/?s=tt${cleanId}`;
-      streamTitle = "شاهد الفيلم مباشرة عبر مشغل فاصل الآمن";
+    // 1. تحويل المعرف القادم من ستريميو إلى رقمي ليفهمه السيرفر الخلفي
+    const tmdbId = await imdbToTmdb(imdbId, type);
+    if (!tmdbId) {
+      console.log(`[FaselHD] Could not find TMDB ID for ${imdbId}`);
+      return res.json({ streams: [] });
     }
-  } else {
-    // بالنسبة للمسلسلات، نمرر رقم الموسم والحلقة ديناميكياً للمشغل
-    streamUrl = `${FASEL_BASE}/?s=${cleanId}`;
-    streamTitle = `مشاهدة مسلسل - الموسم ${seasonNum} الحلقة ${episodeNum}`;
-  }
 
-  // نرسل مصفوفة البث لـ Stremio، والمشغل الخارجي (Forward) سيتولى الباقي عبر شبكة المستخدم النظيفة
-  return res.json({
-    streams: [
-      {
-        name: providerName,
-        title: `${streamTitle}\n[تخطي تلقائي للحظر السحابي 2026]`,
-        url: streamUrl,
-        behaviorHints: {
-          notWebReady: false,
-          proxyHeaders: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-            "Referer": FASEL_BASE
-          }
-        }
-      }
-    ]
-  });
+    // 2. بناء المعرف بالصيغة الرقمية المطلوبة للـ Backend
+    let resolveId = tmdbId;
+    if (type === "series") {
+      resolveId = `${tmdbId}:${season}:${episode}`;
+    }
+
+    const backendUrl = `${BACKEND}/resolve/${type}/${resolveId}`;
+    console.log(`[FaselHD] Fetching from Backend: ${backendUrl}`);
+
+    // 3. استدعاء السيرفر الخلفي وفك الروابط حية ومباشرة
+    const data = await fetchUrl(backendUrl);
+    const streams = (data.streams || []).map(s => ({
+      name: "🎬 Abdullah - FaselHD HQ",
+      title: s.title || "FaselHD",
+      url: s.url,
+      headers: s.headers || {},
+      behaviorHints: { notWebReady: false }
+    }));
+
+    console.log(`[FaselHD] Found ${streams.length} stream(s) for IMDB: ${imdbId}`);
+    return res.json({ streams });
+
+  } catch (e) {
+    console.error(`[FaselHD Error]: ${e.message}`);
+    return res.json({ streams: [] });
+  }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Alooy Style Addon running on port ${PORT}`));
+app.listen(PORT, () => console.log(`V3 Engine running on port ${PORT}`));
 
 export default app;
